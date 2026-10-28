@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>네이버 이벤트모아 - Naver EventMoa</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Leaflet CSS & JS for Interactive Maps -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Google Fonts - Noto Sans KR -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Noto Sans KR', 'sans-serif'],
+          },
+          colors: {
+            naver: {
+              DEFAULT: '#03C75A',
+              hover: '#02b350',
+              dark: '#009a43',
+              light: '#e8f9f0',
+              bg: '#F5F6F8',
+              border: '#e4e8eb',
+              text: '#202020',
+              gray: '#606060'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      background-color: #F5F6F8;
+      color: #202020;
+    }
+    #map {
+      height: 100%;
+      width: 100%;
+      border-radius: 0.75rem;
+      z-index: 10;
+    }
+    .leaflet-popup-content-wrapper {
+      border-radius: 0.75rem;
+      padding: 2px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 8px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 8px;
+    }
+    .naver-shadow {
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+    }
+  </style>
+</head>
+<body class="text-slate-800 flex flex-col min-h-screen bg-[#F5F6F8]">
+
+  <!-- NAVER TOP GNB HEADER -->
+  <header class="sticky top-0 z-40 bg-white border-b border-naver-border shadow-sm">
+    <div class="max-w-6xl mx-auto px-4">
+      <div class="flex items-center justify-between h-16 gap-4">
+        
+        <!-- Naver EventMoa Logo -->
+        <div class="flex items-center space-x-2 flex-shrink-0 cursor-pointer" onclick="resetFilters()">
+          <div class="bg-naver text-white font-black text-2xl px-2.5 py-0.5 rounded-lg tracking-tighter shadow-sm">
+            N
+          </div>
+          <div class="flex items-baseline space-x-1">
+            <span class="font-extrabold text-xl text-slate-900 tracking-tight">이벤트모아</span>
+            <span class="text-xs text-naver font-bold">MY EVENT</span>
+          </div>
+        </div>
+
+        <!-- NAVER Style Search Bar -->
+        <div class="flex-1 max-w-2xl">
+          <div class="relative flex items-center">
+            <div class="w-full flex items-center bg-white border-2 border-naver rounded-full px-4 py-2 focus-within:shadow-md transition">
+              <input type="text" id="searchInput" oninput="handleSearchInput()" placeholder="성수 팝업, 축제, 영화 시사회, 퀴즈 경품 응모 검색" class="w-full text-sm bg-transparent border-none focus:outline-none placeholder-slate-400 font-medium text-slate-800">
+              <button id="clearSearchBtn" onclick="clearSearch()" class="hidden text-slate-400 hover:text-slate-600 mr-2">
+                <i data-lucide="x-circle" class="w-4 h-4"></i>
+              </button>
+              <button class="text-naver hover:text-naver-hover flex-shrink-0">
+                <i data-lucide="search" class="w-5 h-5 stroke-[2.5]"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right User Actions -->
+        <div class="flex items-center space-x-2 flex-shrink-0">
+          <button onclick="toggleNearMe()" id="nearMeBtn" class="flex items-center space-x-1 text-xs font-bold px-3 py-2 rounded-full border border-naver text-naver bg-naver-light hover:bg-naver hover:text-white transition">
+            <i data-lucide="navigation" class="w-3.5 h-3.5"></i>
+            <span class="hidden sm:inline">내 근처</span>
+          </button>
+
+          <button onclick="openBookmarkDrawer()" class="relative p-2 rounded-full hover:bg-slate-100 transition text-slate-700">
+            <i data-lucide="bookmark" class="w-5 h-5"></i>
+            <span id="bookmarkCountBadge" class="absolute -top-0.5 -right-0.5 bg-rose-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">0</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CATEGORY NAVIGATION TABS (Naver Portal Style Tab) -->
+    <div class="border-t border-slate-100 bg-white">
+      <div class="max-w-6xl mx-auto px-4 flex space-x-1 overflow-x-auto custom-scrollbar text-sm font-bold whitespace-nowrap" id="categoryNavTabs">
+        <!-- Dynamic Category Tabs injected via JS -->
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-grow max-w-6xl w-full mx-auto px-4 py-5 space-y-4">
+
+    <!-- NAVER BANNER / SUB-BAR -->
+    <section class="bg-white p-4 rounded-xl border border-naver-border naver-shadow space-y-3">
+      <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        
+        <!-- Date Quick Select -->
+        <div class="flex items-center space-x-1.5 overflow-x-auto custom-scrollbar text-xs">
+          <span class="text-slate-400 font-bold mr-1 flex items-center">
+            <i data-lucide="calendar" class="w-3.5 h-3.5 mr-1 text-naver"></i>일정:
+          </span>
+          <button onclick="setDateFilter('all')" id="dateFilterAll" class="date-filter-btn px-3 py-1.5 rounded-full font-bold transition bg-naver text-white">전체</button>
+          <button onclick="setDateFilter('today')" id="dateFilterToday" class="date-filter-btn px-3 py-1.5 rounded-full font-bold transition bg-slate-100 text-slate-600 hover:bg-slate-200">오늘 진행</button>
+          <button onclick="setDateFilter('weekend')" id="dateFilterWeekend" class="date-filter-btn px-3 py-1.5 rounded-full font-bold transition bg-slate-100 text-slate-600 hover:bg-slate-200">이번 주말</button>
+          
+          <div class="relative flex items-center ml-1">
+            <input type="date" id="customDatePicker" onchange="handleCustomDateSelect(this.value)" class="text-xs bg-slate-100 text-slate-600 border border-slate-200 rounded-full px-3 py-1 focus:ring-1 focus:ring-naver focus:outline-none">
+          </div>
+        </div>
+
+        <!-- View Mode Switcher (List / Map / Calendar) -->
+        <div class="bg-slate-100 p-1 rounded-lg flex items-center text-xs font-bold text-slate-600 self-end md:self-auto">
+          <button onclick="switchViewMode('grid')" id="viewModeGrid" class="px-3 py-1 rounded-md bg-white text-naver shadow-sm flex items-center space-x-1 transition">
+            <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+            <span>리스트</span>
+          </button>
+          <button onclick="switchViewMode('map')" id="viewModeMap" class="px-3 py-1 rounded-md hover:text-naver flex items-center space-x-1 transition">
+            <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
+            <span>지도</span>
+          </button>
+          <button onclick="switchViewMode('calendar')" id="viewModeCalendar" class="px-3 py-1 rounded-md hover:text-naver flex items-center space-x-1 transition">
+            <i data-lucide="calendar-days" class="w-3.5 h-3.5"></i>
+            <span>달력</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Filter Chips & Result Counter -->
+      <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
+        <div class="flex flex-wrap items-center gap-1.5" id="quickChipsContainer">
+          <button onclick="toggleQuickFilter('free')" id="chip-free" class="chip-btn border border-slate-200 bg-slate-50 hover:bg-naver-light text-slate-600 px-2.5 py-1 rounded-full transition flex items-center space-x-1">
+            <span>🆓 무료 참여</span>
+          </button>
+          <button onclick="toggleQuickFilter('endingSoon')" id="chip-endingSoon" class="chip-btn border border-slate-200 bg-slate-50 hover:bg-naver-light text-slate-600 px-2.5 py-1 rounded-full transition flex items-center space-x-1">
+            <span>🔥 마감 임박 (D-3)</span>
+          </button>
+          <button onclick="toggleQuickFilter('online')" id="chip-online" class="chip-btn border border-slate-200 bg-slate-50 hover:bg-naver-light text-slate-600 px-2.5 py-1 rounded-full transition flex items-center space-x-1">
+            <span>💻 온라인 응모 가능</span>
+          </button>
+        </div>
+
+        <div class="flex items-center space-x-3">
+          <span id="resultCount" class="font-bold text-naver">검색 결과 0개</span>
+          <select id="sortSelect" onchange="renderEvents()" class="bg-transparent border-none font-bold text-slate-600 focus:outline-none cursor-pointer">
+            <option value="popular">추천순</option>
+            <option value="newest">최신순</option>
+            <option value="ending">마감임박순</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION TITLE -->
+    <div class="flex items-center justify-between pt-1">
+      <div>
+        <h2 id="currentCategoryTitle" class="text-lg font-bold text-slate-900 flex items-center space-x-1.5">
+          <span>전체 이벤트</span>
+        </h2>
+      </div>
+    </div>
+
+    <!-- VIEW 1: MAP VIEW CONTAINER -->
+    <section id="mapViewContainer" class="hidden bg-white p-2 rounded-xl border border-naver-border naver-shadow h-[520px] relative">
+      <div id="map"></div>
+      <div class="absolute top-4 right-4 z-20 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-lg shadow-md border border-slate-200 text-xs font-bold text-slate-700 flex items-center space-x-2">
+        <span class="w-2 h-2 rounded-full bg-naver animate-ping"></span>
+        <span>지도의 마커를 누르면 상세 이벤트를 확인합니다.</span>
+      </div>
+    </section>
+
+    <!-- VIEW 2: CALENDAR VIEW CONTAINER -->
+    <section id="calendarViewContainer" class="hidden bg-white p-5 rounded-xl border border-naver-border naver-shadow">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="calendarMonthTitle" class="text-base font-bold text-slate-800">2026년 10월 / 11월 이벤트 일정표</h3>
+        <div class="flex space-x-2 text-[11px] font-bold">
+          <span class="flex items-center space-x-1"><span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span><span>팝업</span></span>
+          <span class="flex items-center space-x-1"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span><span>전시</span></span>
+          <span class="flex items-center space-x-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span><span>축제</span></span>
+          <span class="flex items-center space-x-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span><span>경품</span></span>
+        </div>
+      </div>
+      <div id="calendarGrid" class="grid grid-cols-7 gap-1 text-center text-xs">
+        <div class="font-bold text-rose-500 py-1.5">일</div>
+        <div class="font-bold text-slate-600 py-1.5">월</div>
+        <div class="font-bold text-slate-600 py-1.5">화</div>
+        <div class="font-bold text-slate-600 py-1.5">수</div>
+        <div class="font-bold text-slate-600 py-1.5">목</div>
+        <div class="font-bold text-slate-600 py-1.5">금</div>
+        <div class="font-bold text-indigo-600 py-1.5">토</div>
+      </div>
+    </section>
+
+    <!-- VIEW 3: EVENT CARDS GRID (NAVER SHOPPING / STORE STYLE) -->
+    <section id="eventGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <!-- Cards dynamically generated -->
+    </section>
+
+    <!-- EMPTY STATE -->
+    <div id="emptyState" class="hidden flex-col items-center justify-center py-16 text-center space-y-3 bg-white rounded-xl border border-dashed border-slate-300">
+      <div class="w-12 h-12 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center">
+        <i data-lucide="search-x" class="w-6 h-6"></i>
+      </div>
+      <div>
+        <h3 class="text-sm font-bold text-slate-700">검색된 이벤트가 없습니다</h3>
+        <p class="text-xs text-slate-500 mt-0.5">검색어를 바꾸거나 필터 옵션을 초기화해 보세요.</p>
+      </div>
+      <button onclick="resetFilters()" class="px-4 py-1.5 bg-naver text-white rounded-md text-xs font-bold hover:bg-naver-hover transition">초기화하기</button>
+    </div>
+
+  </main>
+
+  <!-- EVENT DETAIL MODAL -->
+  <div id="detailModal" class="fixed inset-0 z-50 hidden bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+      
+      <!-- Modal Image -->
+      <div class="relative h-56 bg-slate-900 overflow-hidden">
+        <img id="modalImage" src="" alt="Event" class="w-full h-full object-cover">
+        <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+        
+        <button onclick="closeModal()" class="absolute top-3 right-3 bg-black/50 hover:bg-black/70 text-white p-1.5 rounded-full transition">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+
+        <div class="absolute bottom-3 left-4 right-4 space-y-1">
+          <div class="flex items-center space-x-1.5">
+            <span id="modalCategoryBadge" class="px-2 py-0.5 text-[11px] font-bold rounded bg-naver text-white"></span>
+            <span id="modalDdayBadge" class="px-2 py-0.5 text-[11px] font-bold rounded bg-slate-900 text-white border border-slate-700"></span>
+            <span id="modalPriceBadge" class="px-2 py-0.5 text-[11px] font-bold rounded bg-emerald-500 text-white"></span>
+          </div>
+          <h2 id="modalTitle" class="text-lg font-bold text-white leading-snug"></h2>
+        </div>
+      </div>
+
+      <!-- Modal Body Content -->
+      <div class="p-5 overflow-y-auto space-y-4 custom-scrollbar text-xs">
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+          <div class="flex items-start space-x-2">
+            <i data-lucide="calendar" class="w-4 h-4 text-naver mt-0.5"></i>
+            <div>
+              <p class="text-slate-400 font-bold">진행 기간</p>
+              <p id="modalDateRange" class="font-bold text-slate-800 text-xs mt-0.5"></p>
+            </div>
+          </div>
+          <div class="flex items-start space-x-2">
+            <i data-lucide="map-pin" class="w-4 h-4 text-rose-500 mt-0.5"></i>
+            <div>
+              <p class="text-slate-400 font-bold">장소 위치</p>
+              <p id="modalLocation" class="font-bold text-slate-800 text-xs mt-0.5"></p>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h4 class="font-bold text-slate-900 mb-1 flex items-center space-x-1">
+            <i data-lucide="file-text" class="w-3.5 h-3.5 text-naver"></i>
+            <span>상세 내용</span>
+          </h4>
+          <p id="modalDescription" class="text-slate-600 leading-relaxed text-xs whitespace-pre-line"></p>
+        </div>
+
+        <div id="modalTagsContainer" class="flex flex-wrap gap-1"></div>
+
+        <div>
+          <h4 class="font-bold text-slate-900 mb-1">위치 지도</h4>
+          <p id="modalAddress" class="text-slate-500 mb-1.5"></p>
+          <div id="modalMiniMap" class="w-full h-36 bg-slate-100 rounded-lg border border-slate-200 overflow-hidden"></div>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between space-x-2">
+        <button id="modalBookmarkBtn" onclick="" class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 font-bold hover:bg-slate-100 transition flex items-center space-x-1 text-xs">
+          <i data-lucide="bookmark" class="w-3.5 h-3.5"></i>
+          <span id="modalBookmarkText">저장</span>
+        </button>
+
+        <button onclick="shareEvent()" class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 font-bold hover:bg-slate-100 transition flex items-center space-x-1 text-xs">
+          <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
+          <span>공유</span>
+        </button>
+
+        <a id="modalOfficialLink" href="#" target="_blank" class="flex-1 text-center py-2 px-3 bg-naver hover:bg-naver-hover text-white font-bold rounded-lg shadow-sm transition text-xs flex items-center justify-center space-x-1">
+          <span>공식 사이트 / 응모 바로가기</span>
+          <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOOKMARK DRAWER -->
+  <div id="bookmarkDrawer" class="fixed inset-0 z-50 hidden bg-black/40 backdrop-blur-sm justify-end">
+    <div class="bg-white w-full max-w-sm h-full shadow-2xl flex flex-col">
+      <div class="p-4 border-b border-slate-200 flex items-center justify-between">
+        <div class="flex items-center space-x-1.5">
+          <i data-lucide="bookmark" class="w-5 h-5 text-naver"></i>
+          <h3 class="font-bold text-slate-900 text-sm">관심 저장 이벤트</h3>
+        </div>
+        <button onclick="closeBookmarkDrawer()" class="p-1 rounded-lg hover:bg-slate-100 text-slate-500">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div id="bookmarkList" class="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar"></div>
+
+      <div class="p-3 border-t border-slate-200 bg-slate-50">
+        <p class="text-[11px] text-slate-400 text-center">네이버 로그인 없이도 내 브라우저에 안전하게 보관됩니다.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- NOTIFICATION TOAST -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 hidden bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-xl items-center space-x-2">
+    <i data-lucide="check-circle" class="w-4 h-4 text-naver"></i>
+    <span id="toastMsg">알림</span>
+  </div>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    /* DATA SOURCE */
+    const CATEGORIES = [
+      { id: 'all', label: '전체', icon: 'sparkles', badgeBg: 'bg-naver', color: '#03C75A' },
+      { id: 'popup', label: '팝업스토어', icon: 'shopping-bag', badgeBg: 'bg-purple-600', color: '#a855f7', desc: '성수, 홍대, 강남 등 최신 브랜드 팝업 체험존' },
+      { id: 'exhibition', label: '전시/공연', icon: 'palette', badgeBg: 'bg-blue-600', color: '#3b82f6', desc: '몰입형 미술 전시회, 뮤지컬, 연극' },
+      { id: 'festival', label: '지자체 축제', icon: 'landmark', badgeBg: 'bg-emerald-600', color: '#10b981', desc: '전국 지자체 문화 축제 및 야시장' },
+      { id: 'brand', label: '브랜드 행사', icon: 'tag', badgeBg: 'bg-amber-600', color: '#f59e0b', desc: '백화점 및 플래그십 오프라인 시음/체험' },
+      { id: 'giveaway', label: '경품/응모', icon: 'gift', badgeBg: 'bg-rose-600', color: '#f43f5e', desc: '영화 시사회, 퀴즈, 출석체크 경품 행사' }
+    ];
+
+    const EVENTS_DATA = [
+      {
+        id: 'evt-001',
+        title: '삼성 갤럭시 AI 신제품 성수 팝업스토어',
+        category: 'popup',
+        startDate: '2026-10-20',
+        endDate: '2026-11-10',
+        location: '서울 성수동 스페이시스',
+        address: '서울특별시 성동구 연무장길 45',
+        lat: 37.5445,
+        lng: 127.0560,
+        price: '무료 입장',
+        isFree: true,
+        image: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=800&q=80',
+        description: '최신 Galaxy AI 체험존 및 커스텀 굿즈 제작 클래스. 현장 이벤트 참여자 전원 네이버페이 포인트 뽑기권 증정!',
+        tags: ['성수팝업', '삼성Galaxy', '무료굿즈', '네이버페이'],
+        link: 'https://m.naver.com'
+      },
+      {
+        id: 'evt-002',
+        title: '현대백화점 무역센터점 가을 디저트 팝업 페어',
+        category: 'brand',
+        startDate: '2026-10-25',
+        endDate: '2026-11-03',
+        location: '현대백화점 무역센터점 지하 1층',
+        address: '서울특별시 강남구 테헤란로 517',
+        lat: 37.5085,
+        lng: 127.0592,
+        price: '무료 관람',
+        isFree: true,
+        image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80',
+        description: '전국 유명 베이커리 15개 브랜드 총출동! 현대백화점 모바일 앱 쿠폰 제시 시 아메리카노 1잔 무료.',
+        tags: ['디저트페어', '현대백화점', '삼성동', '쿠폰증정'],
+        link: 'https://m.naver.com'
+      },
+      {
+        id: 'evt-003',
+        title: '2026 서울 빛초롱 축제 & 청계천 가을 야시장',
+        category: 'festival',
+        startDate: '2026-10-25',
+        endDate: '2026-11-05',
+        location: '서울 청계천 광장 일대',
+        address: '서울특별시 중구 태평로1가 1',
+        lat: 37.5692,
+        lng: 126.9780,
+        price: '무료 관람',
+        isFree: true,
+        image: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80',
+        description: '청계천 수변을 따라 펼쳐지는 한지 등불 아트 전시 및 야간 푸드트럭 야시장.',
+        tags: ['서울축제', '청계천', '야경명소', '가을나들이'],
+        link: 'https://m.naver.com'
+      },
+      {
+        id: 'evt-004',
+        title: 'CGV 가을 대작 영화 단독 시사회 초대 이벤트',
+        category: 'giveaway',
+        startDate: '2026-10-22',
+        endDate: '2026-10-30',
+        location: 'CGV 용산아이파크몰',
+        address: '서울특별시 용산구 한강대로23길 55',
+        lat: 37.5299,
+        lng: 126.9647,
+        price: '온라인 응모',
+        isFree: true,
+        image: 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=800&q=80',
+        description: '네이버 상영예정작 기대평 작성 시 100명 추첨 CGV 용산 IMAX 시사회 티켓 2매 증정!',
+        tags: ['영화시사회', 'CGV', '온라인응모', '네이버예약'],
+        link: 'https://m.naver.com'
+      },
+      {
+        id: 'evt-005',
+        title: '스타벅스 가을 e-프리퀀시 & 한정판 캠핑백',
+        category: 'giveaway',
+        startDate: '2026-10-15',
+        endDate: '2026-11-15',
+        location: '전국 스타벅스 매장 및 앱',
+        address: '전국 매장',
+        lat: 37.5665,
+        lng: 126.9780,
+        price: '음료 적립',
+        isFree: true,
+        image: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=800&q=80',
+        description: '미션 음료 3잔 포함 총 17잔 적립 시 가을 한정판 캠핑 세트 선착순 증정.',
+        tags: ['스타벅스', '프리퀀시', '한정판', '이벤트'],
+        link: 'https://m.naver.com'
+      },
+      {
+        id: 'evt-006',
+        title: '반 고흐 & 클림트 빛의 시어터 몰입형 미디어아트',
+        category: 'exhibition',
+        startDate: '2026-09-01',
+        endDate: '2026-12-31',
+        location: '서울 광진구 워커힐 호텔',
+        address: '서울특별시 광진구 워커힐로 177',
+        lat: 37.5552,
+        lng: 127.1108,
+        price: '22,000원',
+        isFree: false,
+        image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?auto=format&fit=crop&w=800&q=80',
+        description: '360도 웅장한 빛과 아날로그 사운드로 만나는 고흐와 클림트의 대표작.',
+        tags: ['빛의시어터', '전시회', '실내데이트', '워커힐'],
+        link: 'https://m.naver.com'
+      }
+    ];
+
+    /* STATE */
+    let currentCategory = 'all';
+    let currentDateFilter = 'all';
+    let customDateValue = null;
+    let searchQuery = '';
+    let quickFilters = { free: false, endingSoon: false, online: false };
+    let activeViewMode = 'grid';
+    let bookmarks = JSON.parse(localStorage.getItem('naver_event_bookmarks') || '[]');
+    let mapInstance = null;
+    let mapMarkers = [];
+
+    /* LIFECYCLE */
+    window.onload = function() {
+      lucide.createIcons();
+      renderCategoryTabs();
+      renderEvents();
+      updateBookmarkCount();
+    };
+
+    /* CATEGORY TABS (Naver Style Horizontal Navigation) */
+    function renderCategoryTabs() {
+      const container = document.getElementById('categoryNavTabs');
+      container.innerHTML = CATEGORIES.map(cat => {
+        const isActive = currentCategory === cat.id;
+        const activeClass = isActive 
+          ? 'text-naver border-b-2 border-naver py-3 px-3 font-extrabold' 
+          : 'text-slate-600 hover:text-naver py-3 px-3 font-semibold';
+        return `
+          <button onclick="setCategory('${cat.id}')" class="${activeClass} transition">
+            ${cat.label}
+          </button>
+        `;
+      }).join('');
+    }
+
+    function setCategory(catId) {
+      currentCategory = catId;
+      renderCategoryTabs();
+      
+      const catObj = CATEGORIES.find(c => c.id === catId);
+      document.getElementById('currentCategoryTitle').innerText = catObj.label === '전체' ? '전체 이벤트' : `${catObj.label} 모아보기`;
+      renderEvents();
+    }
+
+    /* FILTERING */
+    function getFilteredEvents() {
+      const todayStr = '2026-10-28';
+      
+      return EVENTS_DATA.filter(evt => {
+        if (currentCategory !== 'all' && evt.category !== currentCategory) return false;
+
+        if (searchQuery.trim() !== '') {
+          const q = searchQuery.toLowerCase();
+          const matchTitle = evt.title.toLowerCase().includes(q);
+          const matchLoc = evt.location.toLowerCase().includes(q);
+          const matchTag = evt.tags.some(t => t.toLowerCase().includes(q));
+          if (!matchTitle && !matchLoc && !matchTag) return false;
+        }
+
+        if (currentDateFilter === 'today') {
+          if (evt.startDate > todayStr || evt.endDate < todayStr) return false;
+        } else if (currentDateFilter === 'weekend') {
+          if (evt.endDate < '2026-10-31' || evt.startDate > '2026-11-01') return false;
+        } else if (currentDateFilter === 'custom' && customDateValue) {
+          if (customDateValue < evt.startDate || customDateValue > evt.endDate) return false;
+        }
+
+        if (quickFilters.free && !evt.isFree) return false;
+        if (quickFilters.online && evt.category !== 'giveaway') return false;
+        if (quickFilters.endingSoon) {
+          const dday = calculateDDay(evt.endDate);
+          if (dday < 0 || dday > 3) return false;
+        }
+
+        return true;
+      });
+    }
+
+    /* RENDER EVENT CARDS (Naver Shopping/Store Style) */
+    function renderEvents() {
+      const filtered = getFilteredEvents();
+      document.getElementById('resultCount').innerText = `검색 결과 ${filtered.length}개`;
+
+      const grid = document.getElementById('eventGrid');
+      const empty = document.getElementById('emptyState');
+
+      if (filtered.length === 0) {
+        grid.innerHTML = '';
+        empty.classList.remove('hidden');
+        empty.classList.add('flex');
+      } else {
+        empty.classList.add('hidden');
+        empty.classList.remove('flex');
+
+        grid.innerHTML = filtered.map(evt => {
+          const catObj = CATEGORIES.find(c => c.id === evt.category);
+          const isBookmarked = bookmarks.includes(evt.id);
+          const dday = calculateDDay(evt.endDate);
+          const ddayText = dday === 0 ? '오늘 마감' : `D-${dday}`;
+
+          return `
+            <div class="bg-white rounded-xl border border-naver-border naver-shadow overflow-hidden hover:border-naver transition-all duration-200 flex flex-col group cursor-pointer" onclick="openModal('${evt.id}')">
+              <!-- Card Image Header -->
+              <div class="relative h-44 bg-slate-100 overflow-hidden">
+                <img src="${evt.image}" alt="${evt.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                <div class="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>
+                
+                <span class="absolute top-2.5 left-2.5 px-2 py-0.5 text-[11px] font-bold rounded text-white ${catObj.badgeBg}">
+                  ${catObj.label}
+                </span>
+
+                <button onclick="toggleBookmark('${evt.id}', event)" class="absolute top-2.5 right-2.5 p-1.5 rounded-full bg-white/90 text-slate-700 hover:text-naver transition shadow-sm">
+                  <i data-lucide="bookmark" class="w-4 h-4 ${isBookmarked ? 'fill-naver text-naver' : ''}"></i>
+                </button>
+
+                <div class="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between text-[11px] font-bold text-white">
+                  <span class="bg-black/60 px-2 py-0.5 rounded">${ddayText}</span>
+                  <span class="bg-naver px-2 py-0.5 rounded">${evt.price}</span>
+                </div>
+              </div>
+
+              <!-- Card Body -->
+              <div class="p-3.5 flex-1 flex flex-col justify-between space-y-2">
+                <div>
+                  <h3 class="font-bold text-slate-900 text-sm leading-snug group-hover:text-naver transition line-clamp-2">
+                    ${evt.title}
+                  </h3>
+                  <p class="text-[11px] text-slate-500 mt-1.5 flex items-center space-x-1">
+                    <i data-lucide="map-pin" class="w-3 h-3 text-rose-500 flex-shrink-0"></i>
+                    <span class="truncate">${evt.location}</span>
+                  </p>
+                  <p class="text-[11px] text-slate-500 mt-0.5 flex items-center space-x-1">
+                    <i data-lucide="calendar" class="w-3 h-3 text-naver flex-shrink-0"></i>
+                    <span>${formatDateRange(evt.startDate, evt.endDate)}</span>
+                  </p>
+                </div>
+
+                <div class="flex flex-wrap gap-1 pt-1">
+                  ${evt.tags.map(t => `<span class="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">#${t}</span>`).join('')}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      lucide.createIcons();
+
+      if (activeViewMode === 'map') updateMapMarkers(filtered);
+      else if (activeViewMode === 'calendar') renderCalendarView(filtered);
+    }
+
+    /* LEAFLET MAP */
+    function initMap() {
+      if (mapInstance) return;
+      mapInstance = L.map('map').setView([37.5445, 127.0560], 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapInstance);
+    }
+
+    function updateMapMarkers(events) {
+      if (!mapInstance) initMap();
+      mapMarkers.forEach(m => mapInstance.removeLayer(m));
+      mapMarkers = [];
+
+      const bounds = [];
+      events.forEach(evt => {
+        const customIcon = L.divIcon({
+          className: 'custom-div-icon',
+          html: `<div class="w-7 h-7 rounded-full bg-naver border-2 border-white text-white flex items-center justify-center shadow-md font-bold text-xs">N</div>`,
+          iconSize: [28, 28]
+        });
+
+        const marker = L.marker([evt.lat, evt.lng], { icon: customIcon }).addTo(mapInstance);
+        marker.bindPopup(`
+          <div class="p-2 text-xs space-y-1">
+            <h4 class="font-bold text-slate-900">${evt.title}</h4>
+            <p class="text-slate-500 text-[10px]">${evt.location}</p>
+            <button onclick="openModal('${evt.id}')" class="w-full mt-1 py-1 bg-naver text-white rounded font-bold text-[10px]">상세보기</button>
+          </div>
+        `);
+        mapMarkers.push(marker);
+        bounds.push([evt.lat, evt.lng]);
+      });
+
+      if (bounds.length > 0) mapInstance.fitBounds(bounds, { padding: [30, 30] });
+    }
+
+    /* CALENDAR VIEW */
+    function renderCalendarView(events) {
+      const grid = document.getElementById('calendarGrid');
+      const headers = Array.from(grid.children).slice(0, 7);
+      grid.innerHTML = '';
+      headers.forEach(h => grid.appendChild(h));
+
+      for (let day = 1; day <= 31; day++) {
+        const dateStr = `2026-10-${day < 10 ? '0' + day : day}`;
+        const dayEvents = events.filter(e => dateStr >= e.startDate && dateStr <= e.endDate);
+
+        const cell = document.createElement('div');
+        cell.className = `p-1 min-h-[60px] border border-slate-100 rounded-lg bg-white flex flex-col justify-between ${day === 28 ? 'ring-2 ring-naver' : ''}`;
+        
+        let badges = dayEvents.slice(0, 2).map(e => 
+          `<div onclick="openModal('${e.id}')" class="text-[9px] text-white bg-naver truncate rounded px-1 cursor-pointer font-bold">${e.title}</div>`
+        ).join('');
+
+        cell.innerHTML = `
+          <div class="flex items-center justify-between text-[10px]">
+            <span class="font-bold ${day === 28 ? 'text-naver' : 'text-slate-700'}">${day}</span>
+            ${day === 28 ? '<span class="text-[8px] bg-naver text-white px-1 rounded">오늘</span>' : ''}
+          </div>
+          <div class="space-y-0.5 mt-0.5">${badges}</div>
+        `;
+        grid.appendChild(cell);
+      }
+    }
+
+    /* MODAL & BOOKMARK */
+    function openModal(eventId) {
+      const evt = EVENTS_DATA.find(e => e.id === eventId);
+      if (!evt) return;
+
+      const catObj = CATEGORIES.find(c => c.id === evt.category);
+      const isBookmarked = bookmarks.includes(evt.id);
+      const dday = calculateDDay(evt.endDate);
+
+      document.getElementById('modalImage').src = evt.image;
+      document.getElementById('modalCategoryBadge').innerText = catObj.label;
+      document.getElementById('modalDdayBadge').innerText = dday === 0 ? '오늘 마감' : `D-${dday}`;
+      document.getElementById('modalPriceBadge').innerText = evt.price;
+      
+      document.getElementById('modalTitle').innerText = evt.title;
+      document.getElementById('modalDateRange').innerText = formatDateRange(evt.startDate, evt.endDate);
+      document.getElementById('modalLocation').innerText = evt.location;
+      document.getElementById('modalAddress').innerText = evt.address;
+      document.getElementById('modalDescription').innerText = evt.description;
+      document.getElementById('modalOfficialLink').href = evt.link;
+
+      document.getElementById('modalTagsContainer').innerHTML = evt.tags.map(t => 
+        `<span class="px-2 py-0.5 bg-naver-light text-naver text-[11px] font-bold rounded">#${t}</span>`
+      ).join('');
+
+      const modalBmBtn = document.getElementById('modalBookmarkBtn');
+      modalBmBtn.onclick = (e) => toggleBookmark(evt.id, e);
+      document.getElementById('modalBookmarkText').innerText = isBookmarked ? '저장됨' : '저장';
+
+      document.getElementById('detailModal').classList.remove('hidden');
+    }
+
+    function closeModal() { document.getElementById('detailModal').classList.add('hidden'); }
+
+    function openBookmarkDrawer() {
+      renderBookmarkList();
+      document.getElementById('bookmarkDrawer').classList.remove('hidden');
+      document.getElementById('bookmarkDrawer').classList.add('flex');
+    }
+
+    function closeBookmarkDrawer() {
+      document.getElementById('bookmarkDrawer').classList.add('hidden');
+      document.getElementById('bookmarkDrawer').classList.remove('flex');
+    }
+
+    function renderBookmarkList() {
+      const container = document.getElementById('bookmarkList');
+      const bookmarkedEvents = EVENTS_DATA.filter(e => bookmarks.includes(e.id));
+
+      if (bookmarkedEvents.length === 0) {
+        container.innerHTML = `<p class="text-center text-xs text-slate-400 py-10">저장된 관심 이벤트가 없습니다.</p>`;
+      } else {
+        container.innerHTML = bookmarkedEvents.map(evt => `
+          <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center space-x-2.5">
+            <img src="${evt.image}" class="w-12 h-12 object-cover rounded">
+            <div class="flex-1 min-w-0">
+              <h4 class="font-bold text-xs text-slate-800 truncate">${evt.title}</h4>
+              <p class="text-[10px] text-slate-500">${evt.location}</p>
+            </div>
+            <button onclick="toggleBookmark('${evt.id}', event)" class="text-slate-400 hover:text-rose-500 p-1">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        `).join('');
+      }
+      lucide.createIcons();
+    }
+
+    function toggleBookmark(eventId, e) {
+      if (e) e.stopPropagation();
+      const idx = bookmarks.indexOf(eventId);
+      if (idx > -1) {
+        bookmarks.splice(idx, 1);
+        showToast('관심 목록에서 삭제되었습니다.');
+      } else {
+        bookmarks.push(eventId);
+        showToast('네이버 관심 이벤트로 저장되었습니다!');
+      }
+
+      localStorage.setItem('naver_event_bookmarks', JSON.stringify(bookmarks));
+      updateBookmarkCount();
+      renderEvents();
+      renderBookmarkList();
+    }
+
+    function updateBookmarkCount() {
+      document.getElementById('bookmarkCountBadge').innerText = bookmarks.length;
+    }
+
+    /* CONTROLS */
+    function switchViewMode(mode) {
+      activeViewMode = mode;
+      ['grid', 'map', 'calendar'].forEach(m => {
+        document.getElementById(`viewMode${m.charAt(0).toUpperCase() + m.slice(1)}`).className = "px-3 py-1 rounded-md hover:text-naver flex items-center space-x-1 transition";
+        document.getElementById(`${m}ViewContainer` || 'eventGrid').classList.add('hidden');
+      });
+
+      document.getElementById('eventGrid').classList.add('hidden');
+      document.getElementById('mapViewContainer').classList.add('hidden');
+      document.getElementById('calendarViewContainer').classList.add('hidden');
+
+      document.getElementById(`viewMode${mode.charAt(0).toUpperCase() + mode.slice(1)}`).className = "px-3 py-1 rounded-md bg-white text-naver shadow-sm flex items-center space-x-1 transition";
+
+      if (mode === 'grid') document.getElementById('eventGrid').classList.remove('hidden');
+      else if (mode === 'map') {
+        document.getElementById('mapViewContainer').classList.remove('hidden');
+        setTimeout(() => { initMap(); updateMapMarkers(getFilteredEvents()); }, 100);
+      } else if (mode === 'calendar') {
+        document.getElementById('calendarViewContainer').classList.remove('hidden');
+        renderCalendarView(getFilteredEvents());
+      }
+    }
+
+    function setDateFilter(type) {
+      currentDateFilter = type;
+      customDateValue = null;
+      document.getElementById('customDatePicker').value = '';
+      document.querySelectorAll('.date-filter-btn').forEach(b => {
+        b.className = "date-filter-btn px-3 py-1.5 rounded-full font-bold transition bg-slate-100 text-slate-600 hover:bg-slate-200";
+      });
+      document.getElementById(`dateFilter${type.charAt(0).toUpperCase() + type.slice(1)}`).className = "date-filter-btn px-3 py-1.5 rounded-full font-bold transition bg-naver text-white";
+      renderEvents();
+    }
+
+    function handleCustomDateSelect(val) {
+      if (!val) return;
+      currentDateFilter = 'custom';
+      customDateValue = val;
+      renderEvents();
+    }
+
+    function toggleQuickFilter(type) {
+      quickFilters[type] = !quickFilters[type];
+      const btn = document.getElementById(`chip-${type}`);
+      if (quickFilters[type]) {
+        btn.className = "chip-btn border border-naver bg-naver-light text-naver font-bold px-2.5 py-1 rounded-full transition flex items-center space-x-1";
+      } else {
+        btn.className = "chip-btn border border-slate-200 bg-slate-50 hover:bg-naver-light text-slate-600 px-2.5 py-1 rounded-full transition flex items-center space-x-1";
+      }
+      renderEvents();
+    }
+
+    function handleSearchInput() {
+      searchQuery = document.getElementById('searchInput').value;
+      document.getElementById('clearSearchBtn').classList.toggle('hidden', searchQuery.length === 0);
+      renderEvents();
+    }
+
+    function clearSearch() {
+      document.getElementById('searchInput').value = '';
+      searchQuery = '';
+      document.getElementById('clearSearchBtn').classList.add('hidden');
+      renderEvents();
+    }
+
+    function toggleNearMe() {
+      showToast('내 주변 성수 및 서울 주요 지역 이벤트를 지도로 확인합니다.');
+      switchViewMode('map');
+    }
+
+    function resetFilters() {
+      currentCategory = 'all';
+      currentDateFilter = 'all';
+      searchQuery = '';
+      quickFilters = { free: false, endingSoon: false, online: false };
+      document.getElementById('searchInput').value = '';
+      renderCategoryTabs();
+      setDateFilter('all');
+      renderEvents();
+    }
+
+    function calculateDDay(endDateStr) {
+      const today = new Date('2026-10-28');
+      const end = new Date(endDateStr);
+      return Math.ceil((end - today) / (1000 * 60 * 60 * 24));
+    }
+
+    function formatDateRange(start, end) {
+      return `${start.replace(/-/g, '.')} ~ ${end.replace(/-/g, '.')}`;
+    }
+
+    function shareEvent() {
+      showToast('이벤트 링크가 복사되었습니다!');
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastMsg').innerText = msg;
+      toast.classList.remove('hidden');
+      toast.classList.add('flex');
+      setTimeout(() => { toast.classList.add('hidden'); toast.classList.remove('flex'); }, 2000);
+    }
+  </script>
+</body>
+</html>
